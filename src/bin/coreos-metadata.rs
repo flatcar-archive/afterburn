@@ -38,7 +38,7 @@ use coreos_metadata::fetch_metadata;
 use coreos_metadata::errors::*;
 
 const CMDLINE_PATH: &'static str = "/proc/cmdline";
-const CMDLINE_OEM_FLAG:&'static str = "coreos.oem.id";
+const CMDLINE_OEM_FLAG:&'static str = "flatcar.oem.id";
 
 #[derive(Debug)]
 struct Config {
@@ -117,7 +117,7 @@ fn init() -> Result<Config> {
     //      prepends the hyphens
     // the preprocessing will probably convert any short flags it finds into
     // long ones
-    let matches = App::new("coreos-metadata")
+    let matches = App::new("flatcar-metadata")
         .version(crate_version!())
         .arg(Arg::with_name("attributes")
              .long("attributes")
