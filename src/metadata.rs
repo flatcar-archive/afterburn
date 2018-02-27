@@ -127,7 +127,7 @@ impl Metadata {
     pub fn write_attributes(&self, attributes_file_path: String) -> Result<()> {
         let mut attributes_file = create_file(&attributes_file_path)?;
         for (k,v) in &self.attributes {
-            write!(&mut attributes_file, "COREOS_{}={}\n", k, v)
+            write!(&mut attributes_file, "FLATCAR_{}={}\n", k, v)
                 .chain_err(|| format!("failed to write attributes to file {:?}", attributes_file))?;
         }
         Ok(())
@@ -140,7 +140,7 @@ impl Metadata {
             .chain_err(|| format!("failed to open authorzied keys directory for user '{}'", ssh_keys_user))?;
 
         // add the ssh keys to the directory
-        authorized_keys_dir.add_keys("coreos-metadata", self.ssh_keys.clone(), true, true)?;
+        authorized_keys_dir.add_keys("flatcar-metadata", self.ssh_keys.clone(), true, true)?;
 
         // write the changes and sync the directory
         authorized_keys_dir.write()
