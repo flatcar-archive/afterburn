@@ -32,7 +32,7 @@ impl ConfigDrive {
         }
 
         // if not try and mount with each of the labels
-        let target = TempDir::new("flatcar-metadata")
+        let target = TempDir::new("coreos-metadata")
             .chain_err(|| "failed to create temporary directory")?;
         mount_ro(&Path::new("/dev/disk/by-label/").join(CONFIG_DRIVE_LABEL_1), target.path(), "iso9660")
             .or_else(|_| mount_ro(&Path::new("/dev/disk/by-label/").join(CONFIG_DRIVE_LABEL_2), target.path(), "iso9660"))?;
