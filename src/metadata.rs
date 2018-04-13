@@ -140,7 +140,7 @@ impl Metadata {
             .chain_err(|| format!("failed to open authorzied keys directory for user '{}'", ssh_keys_user))?;
 
         // add the ssh keys to the directory
-        authorized_keys_dir.add_keys("flatcar-metadata", self.ssh_keys.clone(), true, true)?;
+        authorized_keys_dir.add_keys("coreos-metadata", self.ssh_keys.clone(), true, true)?;
 
         // write the changes and sync the directory
         authorized_keys_dir.write()
