@@ -1,6 +1,10 @@
-# CoreOS Metadata
+# coreos-metadata
 
-This is a small utility, typically used in conjunction with [Ignition][ignition], which reads metadata from a given cloud-provider and applies it to the system. This can include adding SSH keys and writing cloud-specific attributes into an environment file. This file can then be consumed by systemd service units via `EnvironmentFile=`.
+[![Build Status](https://travis-ci.org/coreos/coreos-metadata.svg?branch=master)](https://travis-ci.org/coreos/coreos-metadata)
+![minimum rust 1.26](https://img.shields.io/badge/rust-1.26%2B-orange.svg)
+
+This is a small utility, typically used in conjunction with [Ignition][ignition], which reads metadata from a given cloud-provider and applies it to the system.
+This can include adding SSH keys and writing cloud-specific attributes into an environment file (e.g. `/run/metadata/coreos`), which can then be consumed by systemd service units via `EnvironmentFile=`.
 
 ## Support
 
@@ -48,6 +52,7 @@ The supported cloud providers and their respective metadata are as follows:
     - SSH Keys
     - Attributes
       - COREOS_EC2_HOSTNAME
+      - COREOS_EC2_PUBLIC_HOSTNAME
       - COREOS_EC2_IPV4_LOCAL
       - COREOS_EC2_IPV4_PUBLIC
       - COREOS_EC2_AVAILABILITY_ZONE
@@ -66,12 +71,6 @@ The supported cloud providers and their respective metadata are as follows:
       - COREOS_OPENSTACK_IPV4_LOCAL
       - COREOS_OPENSTACK_IPV4_PUBLIC
       - COREOS_OPENSTACK_INSTANCE_ID
-  - oracle-oci
-    - SSH Keys
-    - Attributes
-      - COREOS_ORACLE_OCI_DISPLAY_NAME
-      - COREOS_ORACLE_OCI_INSTANCE_ID
-      - COREOS_ORACLE_OCI_REGION
   - packet
     - SSH Keys
     - Network Configs
@@ -85,4 +84,16 @@ The supported cloud providers and their respective metadata are as follows:
       - COREOS_VAGRANT_VIRTUALBOX_PRIVATE_IPV4
       - COREOS_VAGRANT_VIRTUALBOX_HOSTNAME
 
+Additionally, some attribute names are reserved for usage by [custom metadata providers][custom-metadata].
+These can be safely used by external providers on a platform not supported by coreos-metadata:
+
+  - custom
+    - Attributes
+      - COREOS_CUSTOM_HOSTNAME
+      - COREOS_CUSTOM_PUBLIC_IPV4
+      - COREOS_CUSTOM_PRIVATE_IPV4
+      - COREOS_CUSTOM_PUBLIC_IPV6
+      - COREOS_CUSTOM_PRIVATE_IPV6
+
 [ignition]: https://github.com/coreos/ignition
+[custom-metadata]: https://github.com/coreos/container-linux-config-transpiler/blob/v0.8.0/doc/dynamic-data.md#custom-metadata-providers
