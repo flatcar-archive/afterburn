@@ -59,7 +59,7 @@ use errors::*;
 use metadata::fetch_metadata;
 
 const CMDLINE_PATH: &str = "/proc/cmdline";
-const CMDLINE_OEM_FLAG: &str = "coreos.oem.id";
+const CMDLINE_OEM_FLAG: &str = "flatcar.oem.id";
 
 #[derive(Debug)]
 struct Config {
