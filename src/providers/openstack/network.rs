@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use openssh_keys::PublicKey;
-use update_ssh_keys::AuthorizedKeyEntry;
 
 use errors::*;
 use network;
@@ -18,8 +17,8 @@ pub struct OpenstackProvider {
 }
 
 impl OpenstackProvider {
-    pub fn new() -> Result<OpenstackProvider> {
-        let client = retry::Client::new()?;
+    pub fn try_new() -> Result<OpenstackProvider> {
+        let client = retry::Client::try_new()?;
         Ok(OpenstackProvider { client })
     }
 
@@ -28,7 +27,8 @@ impl OpenstackProvider {
     }
 
     fn fetch_keys(&self) -> Result<Vec<String>> {
-        let keys_list: Option<String> = self.client
+        let keys_list: Option<String> = self
+            .client
             .get(retry::Raw, OpenstackProvider::endpoint_for("public-keys"))
             .send()?;
         let mut keys = Vec::new();
@@ -38,8 +38,15 @@ impl OpenstackProvider {
                 if tokens.len() != 2 {
                     return Err("error parsing keyID".into());
                 }
-                let key: String = self.client
-                    .get(retry::Raw, OpenstackProvider::endpoint_for(&format!("public-keys/{}/openssh-key", tokens[0])))
+                let key: String = self
+                    .client
+                    .get(
+                        retry::Raw,
+                        OpenstackProvider::endpoint_for(&format!(
+                            "public-keys/{}/openssh-key",
+                            tokens[0]
+                        )),
+                    )
                     .send()?
                     .ok_or("missing ssh key")?;
                 keys.push(key);
@@ -54,7 +61,10 @@ impl MetadataProvider for OpenstackProvider {
         let mut out = HashMap::with_capacity(4);
 
         let add_value = |map: &mut HashMap<_, _>, key: &str, name| -> Result<()> {
-            let value = self.client.get(retry::Raw, OpenstackProvider::endpoint_for(name)).send()?;
+            let value = self
+                .client
+                .get(retry::Raw, OpenstackProvider::endpoint_for(name))
+                .send()?;
             if let Some(value) = value {
                 map.insert(key.to_string(), value);
             }
@@ -70,15 +80,17 @@ impl MetadataProvider for OpenstackProvider {
     }
 
     fn hostname(&self) -> Result<Option<String>> {
-        self.client.get(retry::Raw, OpenstackProvider::endpoint_for("hostname")).send()
+        self.client
+            .get(retry::Raw, OpenstackProvider::endpoint_for("hostname"))
+            .send()
     }
 
-    fn ssh_keys(&self) -> Result<Vec<AuthorizedKeyEntry>> {
+    fn ssh_keys(&self) -> Result<Vec<PublicKey>> {
         let mut out = Vec::new();
 
         for key in &self.fetch_keys()? {
             let key = PublicKey::parse(&key)?;
-            out.push(AuthorizedKeyEntry::Valid{key});
+            out.push(key);
         }
 
         Ok(out)
@@ -90,5 +102,10 @@ impl MetadataProvider for OpenstackProvider {
 
     fn network_devices(&self) -> Result<Vec<network::Device>> {
         Ok(vec![])
+    }
+
+    fn boot_checkin(&self) -> Result<()> {
+        warn!("boot check-in requested, but not supported on this platform");
+        Ok(())
     }
 }
