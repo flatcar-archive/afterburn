@@ -17,8 +17,6 @@ extern crate base64;
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate hyper;
 extern crate hostname;
 extern crate ipnetwork;
 extern crate nix;
@@ -38,6 +36,8 @@ extern crate slog_term;
 #[macro_use]
 extern crate slog_scope;
 extern crate tempdir;
+extern crate tempfile;
+#[cfg(feature = "cl-legacy")]
 extern crate update_ssh_keys;
 extern crate users;
 
@@ -54,19 +54,18 @@ mod util;
 use clap::{App, Arg};
 use slog::Drain;
 use std::env;
-use std::fs::File;
-use std::io::prelude::*;
 
 use errors::*;
 use metadata::fetch_metadata;
 
+/// Path to kernel command-line (requires procfs mount).
 const CMDLINE_PATH: &str = "/proc/cmdline";
-const CMDLINE_OEM_FLAG: &str = "flatcar.oem.id";
 
 #[derive(Debug)]
 struct Config {
     provider: String,
     attributes_file: Option<String>,
+    check_in: bool,
     ssh_keys_user: Option<String>,
     hostname_file: Option<String>,
     network_units_dir: Option<String>,
@@ -85,34 +84,44 @@ fn run() -> Result<()> {
     debug!("Logging initialized");
 
     // initialize program
-    let config = init()
-        .chain_err(|| "initialization")?;
+    let config = init().chain_err(|| "initialization")?;
 
     trace!("cli configuration - {:?}", config);
 
     // fetch the metadata from the configured provider
-    let metadata = fetch_metadata(&config.provider)
-        .chain_err(|| "fetching metadata from provider")?;
+    let metadata =
+        fetch_metadata(&config.provider).chain_err(|| "fetching metadata from provider")?;
 
     // write attributes if configured to do so
-    config.attributes_file
+    config
+        .attributes_file
         .map_or(Ok(()), |x| metadata.write_attributes(x))
         .chain_err(|| "writing metadata attributes")?;
 
     // write ssh keys if configured to do so
-    config.ssh_keys_user
+    config
+        .ssh_keys_user
         .map_or(Ok(()), |x| metadata.write_ssh_keys(x))
         .chain_err(|| "writing ssh keys")?;
 
     // write hostname if configured to do so
-    config.hostname_file
+    config
+        .hostname_file
         .map_or(Ok(()), |x| metadata.write_hostname(x))
         .chain_err(|| "writing hostname")?;
 
     // write network units if configured to do so
-    config.network_units_dir
+    config
+        .network_units_dir
         .map_or(Ok(()), |x| metadata.write_network_units(x))
         .chain_err(|| "writing network units")?;
+
+    // perform boot check-in.
+    if config.check_in {
+        metadata
+            .boot_checkin()
+            .chain_err(|| "checking-in instance boot to cloud provider")?;
+    }
 
     debug!("Done!");
 
@@ -140,71 +149,66 @@ fn init() -> Result<Config> {
     //      prepends the hyphens
     // the preprocessing will probably convert any short flags it finds into
     // long ones
-    let matches = App::new("coreos-metadata")
+    let matches = App::new("Afterburn")
         .version(crate_version!())
-        .arg(Arg::with_name("attributes")
-             .long("attributes")
-             .help("The file into which the metadata attributes are written")
-             .takes_value(true))
-        .arg(Arg::with_name("cmdline")
-             .long("cmdline")
-             .help("Read the cloud provider from the kernel cmdline"))
-        .arg(Arg::with_name("hostname")
-             .long("hostname")
-             .help("The file into which the hostname should be written")
-             .takes_value(true))
-        .arg(Arg::with_name("network-units")
-             .long("network-units")
-             .help("The directory into which network units are written")
-             .takes_value(true))
-        .arg(Arg::with_name("provider")
-             .long("provider")
-             .help("The name of the cloud provider")
-             .takes_value(true))
-        .arg(Arg::with_name("ssh-keys")
-             .long("ssh-keys")
-             .help("Update SSH keys for the given user")
-             .takes_value(true))
+        .arg(
+            Arg::with_name("attributes")
+                .long("attributes")
+                .help("The file into which the metadata attributes are written")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("check-in")
+                .long("check-in")
+                .help("Check-in this instance boot with the cloud provider"),
+        )
+        .arg(
+            Arg::with_name("cmdline")
+                .long("cmdline")
+                .help("Read the cloud provider from the kernel cmdline"),
+        )
+        .arg(
+            Arg::with_name("hostname")
+                .long("hostname")
+                .help("The file into which the hostname should be written")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("network-units")
+                .long("network-units")
+                .help("The directory into which network units are written")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("provider")
+                .long("provider")
+                .help("The name of the cloud provider")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("ssh-keys")
+                .long("ssh-keys")
+                .help("Update SSH keys for the given user")
+                .takes_value(true),
+        )
         .get_matches_from(args);
 
     // return configuration
     Ok(Config {
         provider: match matches.value_of("provider") {
             Some(provider) => String::from(provider),
-            None => if matches.is_present("cmdline") {
-                get_oem()?
-            } else {
-                return Err("Must set either --provider or --cmdline".into());
+            None => {
+                if matches.is_present("cmdline") {
+                    util::get_platform(CMDLINE_PATH)?
+                } else {
+                    return Err("Must set either --provider or --cmdline".into());
+                }
             }
         },
         attributes_file: matches.value_of("attributes").map(String::from),
+        check_in: matches.is_present("check-in"),
         ssh_keys_user: matches.value_of("ssh-keys").map(String::from),
         hostname_file: matches.value_of("hostname").map(String::from),
         network_units_dir: matches.value_of("network-units").map(String::from),
     })
-}
-
-fn get_oem() -> Result<String> {
-    // open the cmdline file
-    let mut file = File::open(CMDLINE_PATH)
-        .chain_err(|| format!("Failed to open cmdline file ({})", CMDLINE_PATH))?;
-
-    // read the contents
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .chain_err(|| format!("Failed to read cmdline file ({})", CMDLINE_PATH))?;
-
-    // split the contents into elements
-    let params: Vec<Vec<&str>> = contents.split(' ')
-        .map(|s| s.split('=').collect())
-        .collect();
-
-    // find the oem flag
-    for p in params {
-        if p.len() > 1 && p[0] == CMDLINE_OEM_FLAG {
-            return Ok(String::from(p[1]));
-        }
-    }
-
-    Err(format!("Couldn't find '{}' flag in cmdline file ({})", CMDLINE_OEM_FLAG, CMDLINE_PATH).into())
 }

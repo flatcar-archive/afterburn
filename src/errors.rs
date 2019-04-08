@@ -12,19 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-error_chain!{
+#![allow(deprecated)]
+
+use reqwest::header;
+use serde_json;
+
+error_chain! {
     links {
         PublicKey(::openssh_keys::errors::Error, ::openssh_keys::errors::ErrorKind);
-        AuthorizedKeys(::update_ssh_keys::errors::Error, ::update_ssh_keys::errors::ErrorKind);
+        AuthorizedKeys(::update_ssh_keys::errors::Error, ::update_ssh_keys::errors::ErrorKind) #[cfg(feature = "cl-legacy")];
     }
     foreign_links {
         Log(::slog::Error);
         XmlDeserialize(::serde_xml_rs::Error);
         Base64Decode(::base64::DecodeError);
         Io(::std::io::Error);
+        Json(serde_json::Error);
         Reqwest(::reqwest::Error);
-        Hyper(::hyper::error::Error);
         OpensslStack(::openssl::error::ErrorStack);
+        HeaderValue(header::InvalidHeaderValue);
     }
     errors {
         UnknownProvider(p: String) {
