@@ -77,18 +77,18 @@ mod tests {
     use super::*;
     #[test]
     fn test_find_flag() {
-        let flagname = "coreos.oem.id";
+        let flagname = "flatcar.oem.id";
         let tests = vec![
             ("", None),
             ("foo=bar", None),
-            ("coreos.oem.id", None),
-            ("coreos.oem.id=", None),
-            ("coreos.oem.id=\t", None),
-            ("coreos.oem.id=ec2", Some("ec2".to_string())),
-            ("coreos.oem.id=\tec2", Some("ec2".to_string())),
-            ("coreos.oem.id=ec2\n", Some("ec2".to_string())),
-            ("foo=bar coreos.oem.id=ec2", Some("ec2".to_string())),
-            ("coreos.oem.id=ec2 foo=bar", Some("ec2".to_string())),
+            ("flatcar.oem.id", None),
+            ("flatcar.oem.id=", None),
+            ("flatcar.oem.id=\t", None),
+            ("flatcar.oem.id=ec2", Some("ec2".to_string())),
+            ("flatcar.oem.id=\tec2", Some("ec2".to_string())),
+            ("flatcar.oem.id=ec2\n", Some("ec2".to_string())),
+            ("foo=bar flatcar.oem.id=ec2", Some("ec2".to_string())),
+            ("flatcar.oem.id=ec2 foo=bar", Some("ec2".to_string())),
         ];
         for (tcase, tres) in tests {
             let res = find_flag_value(flagname, tcase);
