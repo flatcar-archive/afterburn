@@ -14,35 +14,56 @@
 
 //! google compute engine metadata fetcher
 
-use std::collections::HashMap;
-
+#[cfg(test)]
+use mockito;
 use openssh_keys::PublicKey;
-use update_ssh_keys::AuthorizedKeyEntry;
+use reqwest::header::{HeaderName, HeaderValue};
+use std::collections::HashMap;
 
 use errors::*;
 use network;
 use providers::MetadataProvider;
 use retry;
 
-header! {(MetadataFlavor, "Metadata-Flavor") => [String]}
-const GOOGLE: &str = "Google";
+#[cfg(test)]
+mod mock_tests;
+
+static HDR_METADATA_FLAVOR: &str = "metadata-flavor";
+
+#[cfg(not(feature = "cl-legacy"))]
+static ENV_PREFIX: &str = "GCP";
+#[cfg(feature = "cl-legacy")]
+static ENV_PREFIX: &str = "GCE";
 
 #[derive(Clone, Debug)]
-pub struct GceProvider {
+pub struct GcpProvider {
     client: retry::Client,
 }
 
-impl GceProvider {
-    pub fn new() -> Result<GceProvider> {
-        let client = retry::Client::new()?
-            .header(MetadataFlavor(GOOGLE.to_owned()))
+impl GcpProvider {
+    pub fn try_new() -> Result<GcpProvider> {
+        let client = retry::Client::try_new()?
+            .header(
+                HeaderName::from_static(HDR_METADATA_FLAVOR),
+                HeaderValue::from_static("Google"),
+            )
             .return_on_404(true);
 
-        Ok(GceProvider { client })
+        Ok(GcpProvider { client })
     }
 
+    #[cfg(test)]
     fn endpoint_for(name: &str) -> String {
-        format!("http://metadata.google.internal/computeMetadata/v1/{}", name)
+        let url = mockito::server_url();
+        format!("{}/{}", url, name)
+    }
+
+    #[cfg(not(test))]
+    fn endpoint_for(name: &str) -> String {
+        format!(
+            "http://metadata.google.internal/computeMetadata/v1/{}",
+            name
+        )
     }
 
     fn fetch_all_ssh_keys(&self) -> Result<Vec<String>> {
@@ -62,9 +83,13 @@ impl GceProvider {
         // Instance-level, new endpoint
         let mut keys = self.fetch_ssh_keys("instance/attributes/ssh-keys")?;
 
-        let block_project_keys: Option<String> = self.client
+        let block_project_keys: Option<String> = self
+            .client
             .clone()
-            .get(retry::Raw, GceProvider::endpoint_for("instance/attributes/block-project-ssh-keys"))
+            .get(
+                retry::Raw,
+                GcpProvider::endpoint_for("instance/attributes/block-project-ssh-keys"),
+            )
             .send()?;
 
         if block_project_keys == Some("true".to_owned()) {
@@ -80,17 +105,21 @@ impl GceProvider {
     }
 
     fn fetch_ssh_keys(&self, key: &str) -> Result<Vec<String>> {
-        let key_data: Option<String> = self.client.get(retry::Raw, GceProvider::endpoint_for(key)).send()?;
+        let key_data: Option<String> = self
+            .client
+            .get(retry::Raw, GcpProvider::endpoint_for(key))
+            .send()?;
         if let Some(key_data) = key_data {
             let mut keys = Vec::new();
             for l in key_data.lines() {
                 if l.is_empty() {
-                    continue
+                    continue;
                 }
                 let mut l = l.to_owned();
-                let index = l.find(':')
+                let index = l
+                    .find(':')
                     .ok_or("character ':' not found in line in key data")?;
-                keys.push(l.split_off(index+1));
+                keys.push(l.split_off(index + 1));
             }
             Ok(keys)
         } else {
@@ -100,12 +129,15 @@ impl GceProvider {
     }
 }
 
-impl MetadataProvider for GceProvider {
+impl MetadataProvider for GcpProvider {
     fn attributes(&self) -> Result<HashMap<String, String>> {
         let mut out = HashMap::with_capacity(3);
 
         let add_value = |map: &mut HashMap<_, _>, key: &str, name| -> Result<()> {
-            let value: Option<String> = self.client.get(retry::Raw, GceProvider::endpoint_for(name)).send()?;
+            let value: Option<String> = self
+                .client
+                .get(retry::Raw, GcpProvider::endpoint_for(name))
+                .send()?;
 
             if let Some(value) = value {
                 if !value.is_empty() {
@@ -116,23 +148,37 @@ impl MetadataProvider for GceProvider {
             Ok(())
         };
 
-        add_value(&mut out, "GCE_HOSTNAME", "instance/hostname")?;
-        add_value(&mut out, "GCE_IP_EXTERNAL_0", "instance/network-interfaces/0/access-configs/0/external-ip")?;
-        add_value(&mut out, "GCE_IP_LOCAL_0", "instance/network-interfaces/0/ip")?;
+        add_value(
+            &mut out,
+            &format!("{}_HOSTNAME", ENV_PREFIX),
+            "instance/hostname",
+        )?;
+        add_value(
+            &mut out,
+            &format!("{}_IP_EXTERNAL_0", ENV_PREFIX),
+            "instance/network-interfaces/0/access-configs/0/external-ip",
+        )?;
+        add_value(
+            &mut out,
+            &format!("{}_IP_LOCAL_0", ENV_PREFIX),
+            "instance/network-interfaces/0/ip",
+        )?;
 
         Ok(out)
     }
 
     fn hostname(&self) -> Result<Option<String>> {
-        self.client.get(retry::Raw, GceProvider::endpoint_for("instance/hostname")).send()
+        self.client
+            .get(retry::Raw, GcpProvider::endpoint_for("instance/hostname"))
+            .send()
     }
 
-    fn ssh_keys(&self) -> Result<Vec<AuthorizedKeyEntry>> {
+    fn ssh_keys(&self) -> Result<Vec<PublicKey>> {
         let mut out = Vec::new();
 
         for key in &self.fetch_all_ssh_keys()? {
             let key = PublicKey::parse(&key)?;
-            out.push(AuthorizedKeyEntry::Valid{key});
+            out.push(key);
         }
 
         Ok(out)
@@ -144,5 +190,10 @@ impl MetadataProvider for GceProvider {
 
     fn network_devices(&self) -> Result<Vec<network::Device>> {
         Ok(vec![])
+    }
+
+    fn boot_checkin(&self) -> Result<()> {
+        warn!("boot check-in requested, but not supported on this platform");
+        Ok(())
     }
 }
