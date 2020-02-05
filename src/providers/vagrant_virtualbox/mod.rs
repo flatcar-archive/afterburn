@@ -20,8 +20,8 @@ use std::thread;
 use std::time::Duration;
 
 use hostname;
+use openssh_keys::PublicKey;
 use pnet;
-use update_ssh_keys::AuthorizedKeyEntry;
 
 use errors::*;
 use network;
@@ -31,8 +31,8 @@ use providers::MetadataProvider;
 pub struct VagrantVirtualboxProvider;
 
 impl VagrantVirtualboxProvider {
-    pub fn new() -> Result<VagrantVirtualboxProvider> {
-        Ok(VagrantVirtualboxProvider)
+    pub fn new() -> VagrantVirtualboxProvider {
+        VagrantVirtualboxProvider
     }
 
     fn get_ip() -> Result<String> {
@@ -80,7 +80,7 @@ impl MetadataProvider for VagrantVirtualboxProvider {
         Ok(hostname::get_hostname())
     }
 
-    fn ssh_keys(&self) -> Result<Vec<AuthorizedKeyEntry>> {
+    fn ssh_keys(&self) -> Result<Vec<PublicKey>> {
         Ok(vec![])
     }
 
@@ -90,5 +90,10 @@ impl MetadataProvider for VagrantVirtualboxProvider {
 
     fn network_devices(&self) -> Result<Vec<network::Device>> {
         Ok(vec![])
+    }
+
+    fn boot_checkin(&self) -> Result<()> {
+        warn!("boot check-in requested, but not supported on this platform");
+        Ok(())
     }
 }
