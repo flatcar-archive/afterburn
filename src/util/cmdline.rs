@@ -29,6 +29,7 @@ const CMDLINE_PLATFORM_FLAG: &str = "ignition.platform.id";
 /// Platform key (CL and RHCOS legacy name: "OEM").
 #[cfg(feature = "cl-legacy")]
 const CMDLINE_PLATFORM_FLAG: &str = "flatcar.oem.id";
+const CMDLINE_PLATFORM_FLAG_COREOS: &str = "coreos.oem.id";
 
 // Get platform/OEM value from cmdline file.
 pub fn get_platform(fpath: &str) -> Result<String> {
@@ -48,11 +49,19 @@ pub fn get_platform(fpath: &str) -> Result<String> {
             trace!("found '{}' flag: {}", CMDLINE_PLATFORM_FLAG, platform);
             Ok(platform)
         }
-        None => bail!(
-            "Couldn't find flag '{}' in cmdline file ({})",
-            CMDLINE_PLATFORM_FLAG,
-            fpath
-        ),
+        None =>
+            match find_flag_value(CMDLINE_PLATFORM_FLAG_COREOS, &contents) {
+                Some(platform) => {
+                trace!("found '{}' flag: {}", CMDLINE_PLATFORM_FLAG_COREOS, platform);
+                    Ok(platform)
+                },
+                None =>
+                bail!(
+                    "Couldn't find flag '{}' nor '{}' in cmdline file ({})",
+                    CMDLINE_PLATFORM_FLAG, CMDLINE_PLATFORM_FLAG_COREOS,
+                    fpath
+                    ),
+            },
     }
 }
 
@@ -100,6 +109,24 @@ mod tests {
             ("flatcar.oem.id=ec2\n", Some("ec2".to_string())),
             ("foo=bar flatcar.oem.id=ec2", Some("ec2".to_string())),
             ("flatcar.oem.id=ec2 foo=bar", Some("ec2".to_string())),
+        ];
+        for (tcase, tres) in tests {
+            let res = find_flag_value(flagname, tcase);
+            assert_eq!(res, tres, "failed testcase: '{}'", tcase);
+        }
+    }
+    #[test]
+    fn test_find_flag_coreos() {
+        let flagname = "coreos.oem.id";
+        let tests = vec![
+            ("coreos.oem.id", None),
+            ("coreos.oem.id=", None),
+            ("coreos.oem.id=\t", None),
+            ("coreos.oem.id=ec2", Some("ec2".to_string())),
+            ("coreos.oem.id=\tec2", Some("ec2".to_string())),
+            ("coreos.oem.id=ec2\n", Some("ec2".to_string())),
+            ("foo=bar coreos.oem.id=ec2", Some("ec2".to_string())),
+            ("coreos.oem.id=ec2 foo=bar", Some("ec2".to_string())),
         ];
         for (tcase, tres) in tests {
             let res = find_flag_value(flagname, tcase);
