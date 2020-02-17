@@ -93,12 +93,24 @@ impl PacketProvider {
         let data: PacketData = client
             .get(
                 retry::Json,
-                "http://metadata.packet.net/metadata".to_string(),
+                PacketProvider::endpoint(),
             )
             .send()?
             .ok_or("not found")?;
 
         Ok(PacketProvider { data })
+    }
+
+    #[cfg(test)]
+    fn endpoint() -> String {
+        let url = mockito::server_url();
+        url
+    }
+
+    #[cfg(not(test))]
+    fn endpoint() -> String {
+        const URL: &str = "http://metadata.packet.net/metadata";
+        URL.to_string()
     }
 
     fn get_attrs(&self) -> Result<Vec<(String, String)>> {
