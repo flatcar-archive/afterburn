@@ -115,7 +115,11 @@ fn test_attributes() {
     assert_eq!(v["PACKET_HOSTNAME"], "test");
     assert_eq!(v["PACKET_PHONE_HOME_URL"], "http://localhost/phone-home");
     assert_eq!(v["PACKET_IPV4_PUBLIC_0"], "147.0.0.1");
+    assert_eq!(v["PACKET_IPV4_PUBLIC_GW_0"], "147.0.0.0");
     assert_eq!(v["PACKET_IPV4_PRIVATE_0"], "10.0.0.1");
+    assert_eq!(v["PACKET_IPV4_PRIVATE_GW_0"], "10.0.0.0");
     assert_eq!(v["PACKET_IPV6_PUBLIC_0"], "2604:1380::1");
+    assert_eq!(v["PACKET_IPV6_PUBLIC_GW_0"], "2604:1380::");
     assert_eq!(v["PACKET_IPV6_PRIVATE_0"], "fd00::1");
+    assert_eq!(v["PACKET_IPV6_PRIVATE_GW_0"], "fd00::");
 }
