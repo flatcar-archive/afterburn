@@ -25,10 +25,10 @@ use std::{fs, io};
 
 /// Platform key.
 #[cfg(not(feature = "cl-legacy"))]
-const CMDLINE_PLATFORM_FLAG: &str = "ignition.platform.id";
-/// Platform key (CL and RHCOS legacy name: "OEM").
+const CMDLINE_PLATFORM_FLAGS: [&'static str; 1] = ["ignition.platform.id"];
+/// Backwards-compatible platform keys, the first name takes precedence.
 #[cfg(feature = "cl-legacy")]
-const CMDLINE_PLATFORM_FLAG: &str = "coreos.oem.id";
+const CMDLINE_PLATFORM_FLAGS: [&'static str; 2] = ["flatcar.oem.id", "coreos.oem.id"];
 
 // Get platform/OEM value from cmdline file.
 pub fn get_platform(fpath: &str) -> Result<String> {
@@ -43,17 +43,23 @@ pub fn get_platform(fpath: &str) -> Result<String> {
         .read_to_string(&mut contents)
         .chain_err(|| format!("Failed to read cmdline file ({})", fpath))?;
 
-    match find_flag_value(CMDLINE_PLATFORM_FLAG, &contents) {
-        Some(platform) => {
-            trace!("found '{}' flag: {}", CMDLINE_PLATFORM_FLAG, platform);
-            Ok(platform)
+    for flagname in &CMDLINE_PLATFORM_FLAGS {
+        match find_flag_value(flagname, &contents) {
+            Some(platform) => {
+                trace!("found '{}' flag: {}", flagname, platform);
+                return Ok(platform);
+            }
+            None => {
+                continue;
+            }
         }
-        None => bail!(
-            "Couldn't find flag '{}' in cmdline file ({})",
-            CMDLINE_PLATFORM_FLAG,
-            fpath
-        ),
     }
+
+    bail!(
+        "Couldn't find one of the flags '{:?}' in cmdline file ({})",
+        CMDLINE_PLATFORM_FLAGS,
+        fpath
+    )
 }
 
 // Find OEM ID flag value in cmdline string.
@@ -88,22 +94,23 @@ mod tests {
     use super::*;
     #[test]
     fn test_find_flag() {
-        let flagname = "coreos.oem.id";
-        let tests = vec![
-            ("", None),
-            ("foo=bar", None),
-            ("coreos.oem.id", None),
-            ("coreos.oem.id=", None),
-            ("coreos.oem.id=\t", None),
-            ("coreos.oem.id=ec2", Some("ec2".to_string())),
-            ("coreos.oem.id=\tec2", Some("ec2".to_string())),
-            ("coreos.oem.id=ec2\n", Some("ec2".to_string())),
-            ("foo=bar coreos.oem.id=ec2", Some("ec2".to_string())),
-            ("coreos.oem.id=ec2 foo=bar", Some("ec2".to_string())),
-        ];
-        for (tcase, tres) in tests {
-            let res = find_flag_value(flagname, tcase);
-            assert_eq!(res, tres, "failed testcase: '{}'", tcase);
+        for flagname in &CMDLINE_PLATFORM_FLAGS {
+            let tests = vec![
+                ("".to_string(), None),
+                ("foo=bar".to_string(), None),
+                (format!("{}", flagname), None),
+                (format!("{}=", flagname), None),
+                (format!("{}=\t", flagname), None),
+                (format!("{}=ec2", flagname), Some("ec2".to_string())),
+                (format!("{}=\tec2", flagname), Some("ec2".to_string())),
+                (format!("{}=ec2\n", flagname), Some("ec2".to_string())),
+                (format!("foo=bar {}=ec2", flagname), Some("ec2".to_string())),
+                (format!("{}=ec2 foo=bar", flagname), Some("ec2".to_string())),
+            ];
+            for (tcase, tres) in tests {
+                let res = find_flag_value(flagname, &tcase);
+                assert_eq!(res, tres, "failed testcase: '{}'", &tcase);
+            }
         }
     }
 }
