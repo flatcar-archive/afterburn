@@ -24,7 +24,7 @@ use std::io::Read;
 use std::time::Duration;
 
 use reqwest::header;
-use reqwest::{self, Method, Request};
+use reqwest::{self, Method, blocking::Request};
 
 use serde;
 use serde_json;
@@ -93,7 +93,7 @@ impl Deserializer for Raw {
 
 #[derive(Debug, Clone)]
 pub struct Client {
-    client: reqwest::Client,
+    client: reqwest::blocking::Client,
     headers: header::HeaderMap,
     retry: Retry,
     return_on_404: bool,
@@ -101,7 +101,7 @@ pub struct Client {
 
 impl Client {
     pub fn try_new() -> Result<Self> {
-        let client = reqwest::Client::builder()
+        let client = reqwest::blocking::Client::builder()
             .build()
             .chain_err(|| "failed to initialize client")?;
         Ok(Client {
@@ -176,7 +176,7 @@ where
     url: String,
     body: Option<String>,
     d: D,
-    client: reqwest::Client,
+    client: reqwest::blocking::Client,
     headers: header::HeaderMap,
     retry: Retry,
     return_on_404: bool,
@@ -209,7 +209,7 @@ where
         let url = reqwest::Url::parse(self.url.as_str()).chain_err(|| "failed to parse uri")?;
 
         self.retry.clone().retry(|attempt| {
-            let mut builder = reqwest::Client::new()
+            let mut builder = reqwest::blocking::Client::new()
                 .post(url.clone())
                 .headers(self.headers.clone())
                 .header(header::CONTENT_TYPE, self.d.content_type());

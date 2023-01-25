@@ -26,7 +26,7 @@ nix = "^0.20.0"
 openssh-keys = "^0.4.1"
 openssl = "^0.10.20"
 pnet = { version = "0.31", features = ["std"] }
-reqwest = "^0.9.5"
+reqwest = { version = "^0.11.0", features = ["blocking"] }
 serde = "1.0"
 serde-xml-rs = "0.2"
 serde_derive = "1.0"
