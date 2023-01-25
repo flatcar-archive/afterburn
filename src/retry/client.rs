@@ -36,7 +36,7 @@ use retry::Retry;
 use retry::raw_deserializer;
 
 pub trait Deserializer {
-    fn deserialize<T, R>(&self, R) -> Result<T>
+    fn deserialize<T, R>(&self, _: R) -> Result<T>
     where
         T: for<'de> serde::Deserialize<'de>,
         R: Read;
